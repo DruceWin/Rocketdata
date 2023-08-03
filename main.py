@@ -27,7 +27,6 @@ class DataCollector:
             "phones": phones,
             "working_hours": working_hours
         })
-        print(self._result_list[-1])
 
     def clear_result_list(self):
         self._result_list = []
@@ -39,7 +38,7 @@ class DataCollector:
         def get_data_by_city(url: str):
             session = HTMLSession()
             r = session.get(f'{url}/about')
-            print(f'{url}/about')
+
             # извлечение количества точек в городе через JS
             js = '''
             () => {
@@ -49,14 +48,12 @@ class DataCollector:
             }
             '''
             length = r.html.render(script=js, reload=False, timeout=30)["len"]
-            print('Кол-во адресов', length)
 
             # Постоянные параметры
             address = r.html.find('a.city-select__current', first=True).text
             phones = [r.html.find('div.contacts__phone', first=True).find('a', first=True).text]
 
             for i in range(length):
-                print(f"{i} - ", end="")
                 # прокликивание каждой точки для извлечения времени работы и заодно адреса с координатами
                 click_point = f"""
                 () => {{
@@ -67,7 +64,6 @@ class DataCollector:
                 """
                 r.html.render(script=click_point, sleep=1, reload=True, timeout=length*10)
                 active = r.html.find('.active', first=True)
-                print(True if active else False)
                 worktime = r.html.find('.work-time')
                 self.append_result_list(
                     _name,
@@ -82,10 +78,100 @@ class DataCollector:
         first_session = HTMLSession()
         base_page = first_session.get('https://yapdomik.ru')
         list_of_city = base_page.html.find('a.city-list-item')
-        print(f"Список городов компании '{_name}': {' '.join([c.text for c in list_of_city])}")
         for c in list_of_city:
             url = c.attrs['href']
             get_data_by_city(url)
+
+        return self._result_list
+
+    @timer
+    def get_dentalia_data(self) -> list[dict]:
+        _name = 'dentalia'
+
+        first_session = HTMLSession()
+        # r = first_session.get('https://dentalia.com/clinica/')
+        r = first_session.get('https://dentalia.com/clinica/?jsf=jet-engine:clinicas-archive&tax=estados:19')
+        print(True if r.html.html else False)
+        print(datetime.datetime.now())
+        r.html.render(reload=True, sleep=5, timeout=120)
+        x = r.html.find('div[data-elementor-type="archive"]',
+                        first=True).find('div.jet-listing-grid', first=True)
+        print(x.html)
+        list_of_clinics = x.find('div.jet-listing-grid__item')
+        print(list_of_clinics)
+        print('Кол-во адресов', len(list_of_clinics))
+
+        counter = 0
+        for i in list_of_clinics:
+            print(f"{counter} - ", end="")
+            counter += 1
+            name = f"{_name} {i.find('h3.elementor-heading-title', first=True).text}"
+            address_phones_worktime = i.find('div.jet-listing-dynamic-field__content')
+            address = address_phones_worktime[0].text
+            # latlon = 1
+            phones1 = address_phones_worktime[1].text.split()
+            phones2 = [i.find('a[href^="tel"]').attrs['href'][3:]]
+            phones = phones1 + phones2
+            worktime = address_phones_worktime[2].text
+            print(
+                name, address, phones, worktime
+            )
+            break
+            # self.append_result_list(
+            #     f"{_name} {}",
+            #     f"{address}, {active.find('span', first=True).text}",
+            #     [float(active.attrs["data-latitude"]), float(active.attrs["data-longitude"])],
+            #     phones,
+            #     [i.text.replace("\n", " ") for i in worktime]
+            # )
+
+        return self._result_list
+
+    @timer
+    def get_santaelena_data(self) -> list[dict]:
+        _name = 'Pastelería Santa Elena'
+
+        def get_data_by_city(url: str, city_name: str):
+            session = HTMLSession()
+            r = session.get(url)
+            cards = r.html.find(
+                'div[data-elementor-type="wp-page"]', first=True
+            ).find('div.elementor-column-wrap.elementor-element-populated')
+            cards = [i for i in cards if i.find('a[href^="https://www.google.com/maps"]')]
+
+            # map_session = HTMLSession()
+            # r_map = map_session.get(cards[0].find('a[href^="https://www.google.com/maps"]').attrs['href'])
+            # r_map.html.render(reload=True, sleep=1, timeout=10)
+            # legendPanel
+
+            for i in cards:
+                text_part = i.find('div.elementor-text-editor', first=True).text
+                kw = ('Dirección:', 'Teléfono:', 'Horario de atención:')
+
+                address = text_part[text_part.find(kw[0])+len(kw[0]):text_part.find(kw[1])].strip().replace("\n", " ")
+                phone = text_part[text_part.find(kw[1])+len(kw[1]):text_part.find(kw[2])].strip()
+                worktime = text_part[text_part.find(kw[2])+len(kw[2]):].strip()
+                self.append_result_list(
+                    f"{_name} {i.find('h3.elementor-heading-title', first=True).text}".replace("\n", " "),
+                    f"{city_name}, {address}",
+                    [float(0), float(0)],
+                    phone.split('\n'),
+                    worktime.split('\n')
+                )
+
+            session.close()
+
+        first_session = HTMLSession()
+        base_page = first_session.get('https://www.santaelena.com.co/')
+        url_for_shops = 'https://www.santaelena.com.co/tiendas-pasteleria/'
+        list_of_city = base_page.html.find(
+            'nav.elementor-nav-menu--main', first=True
+        ).find(f'a[href^="{url_for_shops}"]')
+        list_of_city = [i for i in list_of_city if i.attrs['href'] != url_for_shops]
+        for c in list_of_city:
+            url = c.attrs['href']
+            name_of_city = c.text[c.text.find(' en ')+4:]
+            get_data_by_city(url, name_of_city)
 
         return self._result_list
 
@@ -101,38 +187,17 @@ class DataCollector:
 if __name__ == '__main__':
     collector = DataCollector()
 
+    print('Сбор информации по santaelena.com.co')
+    collector.get_santaelena_data()
+    collector.save_json("santaelena")
+    print('Файл сохранён в - santaelena.json')
+
     print('Сбор информации по yapdomik.ru')
     collector.get_yapdomik_data()
     collector.save_json("yapdomik")
     print('Файл сохранён в - yapdomik.json')
 
-
-# Первоначальная попытка, пока не упёрся в отсутствие актуальных данных по времени работы в yapdomik.ru  :)
-# x = requests.get('https://dentalia.com/clinica/?jsf=jet-engine:clinicas-archive&tax=estados:19')
-# page = requests.get('https://omsk.yapdomik.ru/about')
-# soup = BeautifulSoup(page.text, 'html.parser')
-#
-# # initial_state = re.search("window.initialState = ", page.text)
-# scripts = soup.findAll('script')
-#
-# name = 'Японский Домик'
-# address = soup.find('div', class_='city-select').find('a').text
-# phones = [soup.find('div', class_='contacts__phone').find('a').text]
-#
-# initial_state = ''
-#
-# result_list = []
-# for s in scripts:
-#     if 'window.initialState' in s.text:
-#         initial_state = json.loads(s.text[s.text.find("= ")+2:])
-#         for shop in initial_state["shops"]:
-#             result_list.append({
-#                 "name": name,
-#                 "address": f"{address}, {shop['address']}",
-#                 "latlon": list(shop["coord"].values()),
-#                 "phones": phones,
-#                 # "working_hours": [shop["schedule"]]
-#             })
-#         break
-#
-# print(result_list)
+    print('Сбор информации по dentalia.com в разработке!')
+    # collector.get_dentalia_data()
+    # collector.save_json("dentalia")
+    # print('Файл сохранён в - dentalia.json')
