@@ -139,10 +139,55 @@ class DataCollector:
             ).find('div.elementor-column-wrap.elementor-element-populated')
             cards = [i for i in cards if i.find('a[href^="https://www.google.com/maps"]')]
 
-            # map_session = HTMLSession()
-            # r_map = map_session.get(cards[0].find('a[href^="https://www.google.com/maps"]').attrs['href'])
-            # r_map.html.render(reload=True, sleep=1, timeout=10)
-            # legendPanel
+            map_session = HTMLSession()
+            r_map = map_session.get(cards[0].find(
+                'a[href^="https://www.google.com/maps"]', first=True).attrs['href'])
+
+            js_for_map = '''
+            () => {
+                elem = document.querySelectorAll('div[index]');
+                filtElem = Array.from(elem).filter(el => {return !el.attributes.subindex});
+                
+                function clickElement(element, callback) {
+                  element.click();
+                    console.log('click')
+                  setTimeout(callback, 1000);
+                };
+                
+                function processElements() {
+                  myDict = {};
+                  let i = 0;
+                  function iterate() {
+                    if (i < filtElem.length) {
+                      clickElement(filtElem[i], function() {
+                        console.log(filtElem[i].querySelector('div[aria-label]').innerText);
+                        console.log(document.querySelectorAll('a[dir]')[1].href);
+                          myDict[filtElem[i].querySelector('div[aria-label]').innerText] = document.querySelectorAll('a[dir]')[1].href;
+                        i++;
+                        setTimeout(iterate, 500);
+                      });
+                    }
+                  }
+                
+                  iterate();
+                  return myDict
+                };
+                
+                function returnMyNewD(element, callback) {
+                  element.click();
+                    console.log('click')
+                  setTimeout(callback, 1000);
+                };
+                
+                return {
+                    data: processElements(),
+                }
+            }
+            '''
+            raw_coordinates = r_map.html.render(script=js_for_map, reload=True, sleep=10, timeout=30)
+            print(raw_coordinates)
+            print('Нашёл как вытащить координаты, но не хватило времени и знаний в JavaScript на реализацию :(')
+            print(r_map.html.find('a[dir]')[1].attrs['href'])
 
             for i in cards:
                 text_part = i.find('div.elementor-text-editor', first=True).text
@@ -158,8 +203,6 @@ class DataCollector:
                     phone.split('\n'),
                     worktime.split('\n')
                 )
-
-            session.close()
 
         first_session = HTMLSession()
         base_page = first_session.get('https://www.santaelena.com.co/')
@@ -197,7 +240,7 @@ if __name__ == '__main__':
     collector.save_json("yapdomik")
     print('Файл сохранён в - yapdomik.json')
 
-    print('Сбор информации по dentalia.com в разработке!')
+    print('Сбор информации по dentalia.com оказался проблемны и на него уже не хватило времени...')
     # collector.get_dentalia_data()
     # collector.save_json("dentalia")
     # print('Файл сохранён в - dentalia.json')
